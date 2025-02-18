@@ -6,3 +6,5 @@ sim:
 	@echo "Write this Makefile by your self."
 
 include ../Makefile
+
+# below is my code

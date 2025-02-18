@@ -49,7 +49,7 @@ _default:
 SYSTEMC_INCLUDE = /home/willlin/workspace/second/gitpkg/systemc-3.0.0/include/
 SYSTEMC_LIBDIR = /home/willlin/workspace/second/gitpkg/systemc-3.0.0/lib-linux64/
 
-EXPORT = export SYSTEMC_INCLUDE=$(SYSTEMC_INCLUDE) &&\
+EXPORT_SC = export SYSTEMC_INCLUDE=$(SYSTEMC_INCLUDE) &&\
 		export SYSTEMC_LIBDIR=$(SYSTEMC_LIBDIR) && \
 
 LINK = export LD_LIBRARY_PATH=$(SYSTEMC_LIBDIR) && \
@@ -58,21 +58,28 @@ LINK = export LD_LIBRARY_PATH=$(SYSTEMC_LIBDIR) && \
 # Verilator configuration
 VERILATOR = verilator
 VERILATOR_FLAGS_TRACE = --trace-fst
-VERILATOR_FLAGS_CC = --cc --exe --Wall 
-VERILATOR_FLAGS = $(VERILATOR_FLAGS_CC) $(VERILATOR_FLAGS_TRACE)
+VERILATOR_FLAGS_CC = --cc --exe -O3 -Wall
+VERILATOR_FLAGS_INIT = --x-assign fast --x-initial fast
+VERILATOR_FLAGS = $(VERILATOR_FLAGS_CC) $(VERILATOR_FLAGS_TRACE) $(VERILATOR_FLAGS_INIT)
+VERILATOR_CFLAGS =  -CFLAGS -I$(NVBOARD_INCLUDE) -CFLAGS -I$(SDL2_INCLUDE)
+VERILATOR_LDFLAGS_NVB =  -LDFLAGS -lSDL2 -LDFLAGS -lSDL2_image -LDFLAGS -lSDL2_ttf
 
 # Directory configuration
 DIR_VSRC = npc/vsrc/
 DIR_CSRC = npc/csrc/
-DIR_OUTPUT = obj_dir/
+DIR_NXDC = npc/constr/
+DIR_BUILD = build/
+DIR_OUTPUT = build/obj_dir/
 
 # Cpp wrapper
 WRAPPER_TEMPLATE = main.template 
 WRAPPER_CC = main# default name
 WRAPPER = $(WRAPPER_CC)
+CSRCS = $(shell find $(abspath ./npc/csrc) -name "*.c" -or -name "*.cc" -or -name "*.cpp")
 
 # Verilog sourcefile
-FILENAME = top# default name
+VSRCS = $(shell find $(abspath ./npc/vsrc) -name "*.v")
+TOP_NAME = top# default name
 
 # Gtkwave
 GTKWAVE = gtkwave
@@ -81,24 +88,53 @@ VCD = .vcd
 FST = .fst
 WAVE_SUFFIX = $(FST)
 
+# nvboard
+NVBOARD_HOME = /home/willlin/workspace/nvboard/
+NVBOARD_LIB = $(NVBOARD_HOME)build/nvboard.a
+SDL2_INCLUDE = /usr/include/SDL2/
+NVBOARD_INCLUDE = $(NVBOARD_HOME)usr/include/
+EXPORT_NVB = export NVBOARD_HOME=$(NVBOARD_HOME) &&\
+
+include $(NVBOARD_HOME)/scripts/nvboard.mk
+
+debug:
+	@echo CSRCS:$(CSRCS)
+	@echo VSRCS:$(VSRCS)
 
 exec: compile
-	./$(DIR_OUTPUT)V$(FILENAME)
+	./$(DIR_OUTPUT)V$(TOP_NAME)
+
 
 compile: cpp
-	make -j -C $(DIR_OUTPUT) -f V$(FILENAME).mk V$(FILENAME)
+	make -j -C $(DIR_OUTPUT) -f V$(TOP_NAME).mk V$(TOP_NAME) 
 
-cpp:
-	$(VERILATOR) $(VERILATOR_FLAGS) $(DIR_CSRC)$(WRAPPER).cpp $(DIR_VSRC)$(FILENAME).v
+cpp: build
+	$(VERILATOR) $(VERILATOR_FLAGS) $(CSRCS) $(VSRCS) $(NVBOARD_LIB) \
+	--top-module $(TOP_NAME) -Mdir $(DIR_OUTPUT) \
+	$(VERILATOR_CFLAGS) \
+	$(VERILATOR_LDFLAGS_NVB)
 
-env:
-	$(VERILATOR) $(VERILATOR_FLAGS) $(DIR_VSRC)$(FILENAME).v
+env: build
+	$(VERILATOR) $(VERILATOR_FLAGS) $(VSRCS) --top-module $(TOP_NAME) -Mdir $(DIR_OUTPUT)
 
+build:
+	mkdir -p build
+
+# Generate a simple testbench template for cpp wrapper
 template:
 	cp $(DIR_CSRC)$(WRAPPER_TEMPLATE) $(DIR_CSRC)$(WRAPPER_CC).cpp
 
+# Open waveform if exists
 wave: 
 	$(GTKWAVE) $(DIR_OUTPUT)$(WAVE)$(WAVE_SUFFIX)
 
-clean:
-	rm -r $(DIR_OUTPUT)
+# Generate auto-bind for nvboard
+bind:
+	$(EXPORT_NVB)python $(NVBOARD_HOME)/scripts/auto_pin_bind.py $(DIR_NXDC)$(TOP_NAME).nxdc $(DIR_CSRC)auto_bind.cpp
+
+.clean_bind:
+	rm npc/csrc/auto_bind.cpp
+
+clean: .clean_bind
+	rm -r $(DIR_BUILD)
+
