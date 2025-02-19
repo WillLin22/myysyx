@@ -61,7 +61,7 @@ VERILATOR_FLAGS_TRACE = --trace-fst
 VERILATOR_FLAGS_CC = --cc --exe -O3 -Wall
 VERILATOR_FLAGS_INIT = --x-assign fast --x-initial fast
 VERILATOR_FLAGS = $(VERILATOR_FLAGS_CC) $(VERILATOR_FLAGS_TRACE) $(VERILATOR_FLAGS_INIT)
-VERILATOR_CFLAGS =  -CFLAGS -I$(NVBOARD_INCLUDE) -CFLAGS -I$(SDL2_INCLUDE)
+VERILATOR_CFLAGS =  -CFLAGS -I$(NVBOARD_INCLUDE) -CFLAGS -I$(SDL2_INCLUDE) -CFLAGS -DTOP_NAME="\"V$(TOP_NAME)\""
 VERILATOR_LDFLAGS_NVB =  -LDFLAGS -lSDL2 -LDFLAGS -lSDL2_image -LDFLAGS -lSDL2_ttf
 
 # Directory configuration
@@ -130,11 +130,13 @@ wave:
 
 # Generate auto-bind for nvboard
 bind:
-	$(EXPORT_NVB)python $(NVBOARD_HOME)/scripts/auto_pin_bind.py $(DIR_NXDC)$(TOP_NAME).nxdc $(DIR_CSRC)auto_bind.cpp
+	rm -rf $(DIR_NXDC)$(TOP_NAME).nxdc
+	$(DIR_NXDC)nxdc_gen.py --top_name $(TOP_NAME)
+	python $(NVBOARD_HOME)/scripts/auto_pin_bind.py $(DIR_NXDC)$(TOP_NAME).nxdc $(DIR_CSRC)auto_bind.cpp
 
-.clean_bind:
-	rm npc/csrc/auto_bind.cpp
 
-clean: .clean_bind
-	rm -r $(DIR_BUILD)
+clean:
+	rm -f $(DIR_CSRC)auto_bind.cpp
+	rm -f $(DIR_NXDC)$(TOP_NAME).nxdc
+	rm -rf $(DIR_BUILD)
 
